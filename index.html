@@ -1,69 +1,72 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
+  <title>QR Attendance Scanner</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
-    body { font-family: Arial; text-align: center; margin-top: 30px; }
+    body { font-family: Arial, sans-serif; text-align: center; margin-top: 30px; }
     #reader { width: 500px; margin: auto; }
-    #status { margin-top: 20px; font-size: 20px; padding: 10px; transition: background 0.3s; }
+    #status { margin-top: 15px; font-size: 18px; padding: 10px; }
+    #raw { margin-top: 10px; font-size: 16px; color: blue; }
     .success { background-color: #c8ffc8; }
     .error { background-color: #ffc8c8; }
   </style>
 </head>
-
 <body>
   <h2>QR Attendance Scanner</h2>
   <div id="reader"></div>
+  <div id="raw">Scanned Value: (none yet)</div>
   <div id="status">📷 Camera loading...</div>
 
-  <!-- Beep sound -->
   <audio id="beep-sound" src="https://www.soundjay.com/button/beep-07.wav" preload="auto"></audio>
 
 <script>
 let lastScanned = new Set();
 
+// Called when a QR code is successfully scanned
 function onScanSuccess(decodedText) {
+    let decodedID = decodedText.trim();
 
-    if (lastScanned.has(decodedText)) return; // prevent double scan
+    // Show the raw QR code
+    document.getElementById("raw").innerHTML = "Scanned Value: " + decodedID;
 
-    fetch("https://script.google.com/a/macros/plcschools.org/s/AKfycby898OiSh1ByQs5vGn0SdBpr3xSGcpLaCQT47gsHIlCoGhdlhYXg_A5yCR0GTDiSegS/exec", { // Replace with your Apps Script URL
-        method: "POST",
-        body: new URLSearchParams({ id: decodedText })
-    })
+    // Prevent double scanning
+    if (lastScanned.has(decodedID)) return;
+
+    // Call your Apps Script Web App
+    fetch("https://script.google.com/macros/s/AKfycbxxpSQBxIJ_39zOXeOg_foO-3CsOn1RWpdwCj_kQP330Tj_G7Jo4K0ebST2dYi_nTiTCw/exec?id=" + encodeURIComponent(decodedID))
     .then(response => response.text())
-    .then(message => {
+    .then(message => { 
         const status = document.getElementById("status");
-        status.innerHTML = message;
+        status.innerHTML = message; // Show server response
 
-        if (!message.startsWith("Already") && !message.startsWith("ID not found")) {
-            lastScanned.add(decodedText);
+        if (!message.startsWith("Already") &&
+            !message.startsWith("ID not found") &&
+            !message.startsWith("❌")) {
+
+            lastScanned.add(decodedID);
 
             // Play beep
             document.getElementById("beep-sound").play();
-
-            // Flash green
             status.classList.add("success");
             setTimeout(() => { status.classList.remove("success"); }, 500);
         } else {
-            // Flash red for error/already marked
+            // Error flash
             status.classList.add("error");
             setTimeout(() => { status.classList.remove("error"); }, 500);
         }
     })
-    .catch(() => {
+    .catch(error => {
         const status = document.getElementById("status");
         status.innerHTML = "❌ Error marking attendance.";
         status.classList.add("error");
         setTimeout(() => { status.classList.remove("error"); }, 500);
+        console.error(error);
     });
-
-    // Reset message after 2 seconds
-    setTimeout(() => {
-        document.getElementById("status").innerHTML = "📷 Ready for next student...";
-    }, 2000);
 }
 
-// Start camera and QR scanning
+// Initialize camera
 const html5QrCode = new Html5Qrcode("reader");
 
 Html5Qrcode.getCameras().then(devices => {
@@ -71,15 +74,15 @@ Html5Qrcode.getCameras().then(devices => {
         html5QrCode.start(
             devices[0].id,
             { fps: 10, qrbox: 250 },
-            onScanSuccess,
-            () => {} // ignore failures
+            onScanSuccess
         );
         document.getElementById("status").innerHTML = "📷 Ready for scanning...";
+    } else {
+        document.getElementById("status").innerHTML = "❌ No cameras found.";
     }
 }).catch(err => {
     document.getElementById("status").innerHTML = "❌ Camera access denied or not found.";
 });
 </script>
-
 </body>
 </html>

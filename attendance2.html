@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body { font-family: Arial; text-align: center; margin-top: 30px; }
+    #reader { width: 500px; margin: auto; }
+    #status { margin-top: 20px; font-size: 20px; padding: 10px; transition: background 0.3s; }
+    .success { background-color: #c8ffc8; }
+    .error { background-color: #ffc8c8; }
+  </style>
+</head>
+
+<body>
+  <h2>QR Attendance Scanner</h2>
+  <div id="reader"></div>
+  <div id="status">📷 Camera loading...</div>
+
+  <!-- Beep sound -->
+  <audio id="beep-sound" src="https://www.soundjay.com/button/beep-07.wav" preload="auto"></audio>
+
+<script>
+let lastScanned = new Set();
+
+function onScanSuccess(decodedText) {
+
+    if (lastScanned.has(decodedText)) return; // prevent double scan
+
+    fetch("https://script.google.com/a/macros/plcschools.org/s/AKfycby898OiSh1ByQs5vGn0SdBpr3xSGcpLaCQT47gsHIlCoGhdlhYXg_A5yCR0GTDiSegS/exec", { // Replace with your Apps Script URL
+        method: "POST",
+        body: new URLSearchParams({ id: decodedText })
+    })
+    .then(response => response.text())
+    .then(message => {
+        const status = document.getElementById("status");
+        status.innerHTML = message;
+
+        if (!message.startsWith("Already") && !message.startsWith("ID not found")) {
+            lastScanned.add(decodedText);
+
+            // Play beep
+            document.getElementById("beep-sound").play();
+
+            // Flash green
+            status.classList.add("success");
+            setTimeout(() => { status.classList.remove("success"); }, 500);
+        } else {
+            // Flash red for error/already marked
+            status.classList.add("error");
+            setTimeout(() => { status.classList.remove("error"); }, 500);
+        }
+    })
+    .catch(() => {
+        const status = document.getElementById("status");
+        status.innerHTML = "❌ Error marking attendance.";
+        status.classList.add("error");
+        setTimeout(() => { status.classList.remove("error"); }, 500);
+    });
+
+    // Reset message after 2 seconds
+    setTimeout(() => {
+        document.getElementById("status").innerHTML = "📷 Ready for next student...";
+    }, 2000);
+}
+
+// Start camera and QR scanning
+const html5QrCode = new Html5Qrcode("reader");
+
+Html5Qrcode.getCameras().then(devices => {
+    if (devices && devices.length) {
+        html5QrCode.start(
+            devices[0].id,
+            { fps: 10, qrbox: 250 },
+            onScanSuccess,
+            () => {} // ignore failures
+        );
+        document.getElementById("status").innerHTML = "📷 Ready for scanning...";
+    }
+}).catch(err => {
+    document.getElementById("status").innerHTML = "❌ Camera access denied or not found.";
+});
+</script>
+
+</body>
+</html>
